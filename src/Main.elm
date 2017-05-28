@@ -1,50 +1,80 @@
-module Main exposing (main)
-
--- import Html.App    as App
-import Html        exposing (..)
+import Html exposing (..)
+import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import WebSocket
+import List
 
--- main : Program Never
+main : Program Never Model Msg
 main =
   Html.program
-     { init          = init
-     , update        = update
-     , view          = view
-     , subscriptions = subscriptions
-     }
+    { init = init
+    , view = view
+    , update = update
+    , subscriptions = subscriptions
+    }
 
-type alias Model
-  = Int
-
-type Msg
-  = Receive String
-  | Send
+-- MODEL
+type alias Model =
+  { chatMessage : List String
+  , userMessage : String
+  , loginName : String
+  }
 
 init : (Model, Cmd Msg)
 init =
-  (0, Cmd.none)
+  ( Model [""] "" ""
+  , Cmd.none
+  )
 
-view : Model -> Html Msg
-view model =
-  div []
-    [ p [] [ text <| "Pokes: " ++ toString model ]
-    , button [ onClick Send ] [ text "Poke others" ]
-    ]
+type alias ChatMessage =
+  { command : String
+  , content : String
+  }
 
-wsUrl : String
-wsUrl = "ws://localhost:3000"
+-- UPDATE
+type Msg
+  = PostChatMessage
+  | UpdateUserMessage String
+  | NewChatMessage String
+  | LoginMessage String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    Receive "poke" ->
-      (model + 1) ! []
-    Receive _ ->
-      model ! []
-    Send ->
-      model ! [ WebSocket.send wsUrl "poke" ]
+    PostChatMessage ->
+      let
+        message = model.userMessage
+      in
+        { model | userMessage = "" } ! [WebSocket.send "ws://localhost:3000" message]
 
+    UpdateUserMessage message ->
+      { model | userMessage = message } ! []
+
+    NewChatMessage message ->
+      { model | chatMessage = message :: model.chatMessage } ! []
+
+    LoginMessage message ->
+      { model | loginName = message } ! []
+
+-- VIEW
+view : Model -> Html Msg
+view model =
+  div []
+    [ div [] []
+    , input [ placeholder "Message..."
+            , autofocus True
+            , value model.userMessage
+            , onInput UpdateUserMessage
+            ] []
+    , button [ onClick PostChatMessage ] [ text "Submit" ]
+    , div [] (List.map showMessage model.chatMessage)
+    ]
+
+showMessage : String -> Html msg
+showMessage message =
+  div [] [ text message ]
+
+-- SUBSCRIPTIONS
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  WebSocket.listen wsUrl Receive
+  WebSocket.listen "ws://localhost:3000" NewChatMessage
